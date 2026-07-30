@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>UNO</title>
+<meta http-equiv="refresh" content="3">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<style>
+  .seats{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+  .seat{padding:.5rem;text-align:center}
+  .seat .avatar{width:40px;height:40px;border-radius:50%;background:#444;color:#fff;line-height:40px;margin:auto;font-weight:bold}
+  .seat.turn .avatar{background:#28a745}
+  .color-dot{width:20px;height:20px;border-radius:50%;display:inline-block;vertical-align:middle;border:2px solid rgba(0,0,0,.2)}
+  .card{width:56px;height:76px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;margin:2px;padding:0;border:2px solid rgba(0,0,0,.2);overflow:hidden;background:none}
+  .card:disabled{opacity:.35}
+  .card img{width:100%;height:100%;object-fit:cover;display:block}
+  .swatch{width:50px;height:50px;border-radius:50%;border:0;margin:4px}
+</style>
+</head>
+<body>
+<main class="container">
+  <h1 style="text-align:center">UNO</h1>
+
+  <div class="seats">
+    {% for p in game.players %}
+      <div class="seat
+        {%- if game.status == 'started' and not game.awaiting_color and loop.index0 == game.current_player_index %} turn{% endif %}">
+        <div class="avatar">{{ p.name[0]|upper }}</div>
+        <div>{{ p.name }}</div>
+        <small>card:{{ p.hand|length }}</small>
+      </div>
+    {% endfor %}
+  </div>
+
+  <article style="text-align:center">
+    <div class="card" style="width:88px;height:118px;margin:0 auto">
+      <img src="{{ url_for('static', filename='cards/' + (game.discard_pile[-1]|card_image)) }}" alt="{{ game.discard_pile[-1].color }} {{ game.discard_pile[-1].value|card_label }}">
+    </div>
+    <p style="margin:.5rem 0 0;font-size:.85rem">
+      Current color:
+      <span class="color-dot" style="background:
+        {%- if game.current_color == 'red' %}#dc3545
+        {%- elif game.current_color == 'blue' %}#0d6efd
+        {%- elif game.current_color == 'green' %}#198754
+        {%- elif game.current_color == 'yellow' %}#ffc107
+        {%- else %}#999
+        {%- endif %}"></span>
+      {{ game.current_color or '-' }}
+    </p>
+    <p style="margin:.3rem 0 0;font-size:.8rem">
+      {% if game.status == 'ended' %}Game over
+      {% elif game.awaiting_color %}Waiting on a color pick
+      {% elif is_my_turn %}Your turn!
+      {% else %}{{ game.players[game.current_player_index].name }}'s turn
+      {% endif %}
+    </p>
+  </article>
+
+  <article>
+    <strong>Your Hand ({{ my_hand|length }})</strong>
+    <div>
+      {% if game.status == 'ended' %}
+        <p>Game is over.</p>
+      {% elif game.awaiting_color == username %}
+        <p>Choose a color for your wild card:</p>
+        <form method="POST" action="/choose_color">
+          <button name="color" value="red" class="swatch" style="background:#dc3545"></button>
+          <button name="color" value="blue" class="swatch" style="background:#0d6efd"></button>
+          <button name="color" value="green" class="swatch" style="background:#198754"></button>
+          <button name="color" value="yellow" class="swatch" style="background:#ffc107"></button>
+        </form>
+      {% elif game.awaiting_color %}
+        <p>Waiting for {{ game.awaiting_color }} to choose a color...</p>
+      {% else %}
+        {% for item in my_hand %}
+          {% if item.playable and is_my_turn %}
+            <form method="POST" action="/play_card" style="display:inline">
+              <input type="hidden" name="card_index" value="{{ item.index }}">
+              <button class="card">
+                <img src="{{ url_for('static', filename='cards/' + (item.card|card_image)) }}" alt="{{ item.card.color }} {{ item.card.value|card_label }}">
+              </button>
+            </form>
+          {% else %}
+            <button class="card" disabled>
+              <img src="{{ url_for('static', filename='cards/' + (item.card|card_image)) }}" alt="{{ item.card.color }} {{ item.card.value|card_label }}">
+            </button>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  </article>
+
+  {% if game.status == 'started' %}
+    <div style="text-align:center">
+      {% if me and me.hand|length == 1 and not me.called_uno %}
+        <form method="POST" action="/call_uno" style="display:inline">
+          <button>Call UNO!</button>
+        </form>
+      {% endif %}
+
+      {% for name in catchable %}
+        <form method="POST" action="/catch_uno" style="display:inline">
+          <input type="hidden" name="target" value="{{ name }}">
+          <button class="secondary">Catch {{ name }} (missed UNO)</button>
+        </form>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if is_my_turn and not game.awaiting_color %}
+    <div style="text-align:center">
+      <form method="POST" action="/draw_card">
+        <button>Draw a Card</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if game.status == 'ended' %}
+    <article style="background:#ffd93d;color:#222;text-align:center">
+      <h3>{{ game.winner }} Wins!</h3>
+    </article>
+  {% endif %}
+
+  <div style="text-align:center;margin-top:1rem">
+    <a href="/rule" role="button" class="secondary">Rules</a>
+    <form method="POST" action="/reset_game" style="display:inline"><button class="secondary">Leave</button></form>
+  </div>
+</main>
+</body>
+</html>
